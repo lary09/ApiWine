@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using APIWine.Data;
 using APIWine.Models;
+using Microsoft.AspNetCore.Mvc;
 
 namespace APIWine.Controllers
 {
@@ -13,40 +8,38 @@ namespace APIWine.Controllers
     [ApiController]
     public class WinesController : ControllerBase
     {
-        private readonly AppDbContext _context;
 
-        public WinesController(AppDbContext context)
+        private readonly IWineRepository _repository;
+
+        public WinesController(IWineRepository repository)
         {
-            _context = context;
+            _repository = repository;
         }
 
         // GET: api/Wines
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Wine>>> GetWines()
         {
-          if (_context.Wines == null)
-          {
-              return NotFound();
-          }
-            return await _context.Wines.ToListAsync();
+
+            var items = await _repository.GetAll();
+            return Ok(items);
+
         }
 
         // GET: api/Wines/5
         [HttpGet("{id}")]
         public async Task<ActionResult<Wine>> GetWine(long id)
         {
-          if (_context.Wines == null)
-          {
-              return NotFound();
-          }
-            var wine = await _context.Wines.FindAsync(id);
+            var wine = _repository.GetById(id);
+
+            //var wine = await _context.Wines.FindAsync(id);
 
             if (wine == null)
             {
-                return NotFound();
+                return  NotFound();
             }
 
-            return wine;
+            return Ok(wine);
         }
 
         // PUT: api/Wines/5
@@ -58,26 +51,19 @@ namespace APIWine.Controllers
             {
                 return BadRequest();
             }
-
-            _context.Entry(wine).State = EntityState.Modified;
-
             try
             {
-                await _context.SaveChangesAsync();
+                _repository.Update(id, wine);
+
             }
-            catch (DbUpdateConcurrencyException)
+            catch (WineNotFoundExceptiont)
             {
-                if (!WineExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
+                NotFound();
             }
 
+
             return NoContent();
+
         }
 
         // POST: api/Wines
@@ -85,12 +71,20 @@ namespace APIWine.Controllers
         [HttpPost]
         public async Task<ActionResult<Wine>> PostWine(Wine wine)
         {
-          if (_context.Wines == null)
-          {
-              return Problem("Entity set 'AppDbContext.Wines'  is null.");
-          }
-            _context.Wines.Add(wine);
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _repository.Insert(wine);
+
+            }
+            catch (ArgumentNullException)
+            {
+                return Problem("Entity set 'AppDbContext.Wines'  is null.");
+            }
+            catch (WineNotFoundExceptiont)
+
+            {
+                return Problem("There was a problem");
+            }
 
             return CreatedAtAction("GetWine", new { id = wine.id }, wine);
         }
@@ -99,25 +93,19 @@ namespace APIWine.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteWine(long id)
         {
-            if (_context.Wines == null)
+            try
             {
-                return NotFound();
-            }
-            var wine = await _context.Wines.FindAsync(id);
-            if (wine == null)
-            {
-                return NotFound();
-            }
+                await _repository.Delete(id);
 
-            _context.Wines.Remove(wine);
-            await _context.SaveChangesAsync();
+            }
+            catch (WineNotFoundExceptiont)
+            {
+                return NotFound(id);
+            }
 
             return NoContent();
         }
 
-        private bool WineExists(long id)
-        {
-            return (_context.Wines?.Any(e => e.id == id)).GetValueOrDefault();
-        }
+
     }
 }
